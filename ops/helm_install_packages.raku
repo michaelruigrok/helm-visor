@@ -38,7 +38,7 @@ sub MAIN(*@files where { $_ > 0 && $_.all.IO.f }) {
 		my Str $setArgs = .<set>[?].map({" --set {.key}={.value}"}).join;
 
 		my $task = Proc::Async.new(<<
-			helm upgrade --dry-run --install "$_.<name>" "$_.<chart>" --repo "{$_.<repo> // ""}"
+			helm upgrade --install "$_.<name>" "$_.<chart>" --repo "{$_.<repo> // ""}"
 				--namespace "$_.<namespace>" --create-namespace
 				$valArgs $setArgs
 			>>);
