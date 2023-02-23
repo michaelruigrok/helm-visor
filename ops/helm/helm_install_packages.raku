@@ -10,7 +10,11 @@ use JSON::Fast;
 # eg @var[?]. Turn a possible Nil into an empty list []
 sub postfix:<[?]>(Any $var) { $var // [] }
 
-sub MAIN(*@files where { $_ > 0 && $_.all.IO.f }) {
+sub MAIN(
+	Bool :$diff,
+	Bool :$dry-run,
+	*@files where { $_ > 0 && $_.all.IO.f },
+) {
 	my @packages = @files.map( -> $file {
 		$file.IO.slurp.&from-json # get json array of packages from file
 			# add file as a field to each package
@@ -53,8 +57,12 @@ sub MAIN(*@files where { $_ > 0 && $_.all.IO.f }) {
 		my Str $versionArgs = .<version> ?? " --version {.<version>}" !! '';
 
 		my $task = Proc::Async.new(<<
-			helm upgrade --install "$_.<name>" "$_.<chart>" --repo "{.<repo> // ""}"
-				--namespace "$_.<namespace>" --create-namespace
+			echo helm {'diff' if $diff}
+				upgrade --install "$_.<name>" "$_.<chart>"
+				--repo "{.<repo> // ""}
+				--namespace "$_.<namespace>"
+				{ '--create-namespace' if not $diff }
+				{'--dry-run' if $dry-run}
 				$valArgs $setArgs $versionArgs
 			>>);
 
