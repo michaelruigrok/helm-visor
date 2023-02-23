@@ -61,10 +61,14 @@ sub MAIN(
 	*@files where { $_ > 0 && $_.all.IO.f }, # all remaining arguments are put in the @files Array
 ) {
 	# @packages is a list of Maps, where each Map contains the information for a Helm package.
-	my Map @packages = @files.map( -> $file {
+	my @packages = @files.map( -> $file {
 
-		# get yaml/json Array of packages from file contents
-		my @data = load-yaml($file.IO.slurp);
+		# get yaml/json from file contents
+		my $data = load-yaml($file.IO.slurp);
+
+		# put data in an Array (or convert if it's already a list)
+		my @data = $data ~~ List ?? $data.Array !! $data; # Ternary. In Raku, ? is a boolifier, and ! is a negated boolifier, so ternary uses same chars.
+
 		# add file as a field to each package
 		@data.map({ $_.append('file', $file) })
 			.Slip; # Merge all files into a single list
