@@ -46,6 +46,8 @@ sub MAIN(*@files where { $_ > 0 && $_.all.IO.f }) {
 			with .<waitCommand> { .&shell or fail } 
 		}
 
+		for @(.<pre-hook>[?]) { .&shell or fail }
+
 		my Str $valArgs = .<values>[?].map(-> $valueFile {" --values {.<file>.IO.dirname}/$valueFile"}).join;
 		my Str $setArgs = .<set>[?].map({" --set {.key}={.value}"}).join;
 		my Str $versionArgs = .<version> ?? " --version {.<version>}" !! '';
