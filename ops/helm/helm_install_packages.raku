@@ -10,6 +10,29 @@ use JSON::Fast;
 # eg @var[?]. Turn a possible Nil into an empty list []
 sub postfix:<[?]>(Any $var) { $var // [] }
 
+# converts...
+# "a" : {
+#   "b": 1,
+#   "c": 2,
+#   }
+# }
+# to
+# {
+#   "a.b": 1,
+#   "a.c": 2
+# }
+# for all nested objects
+sub helmSetPairs(%map) {
+	%map.map( -> $parent {
+		given $parent.value {
+			# merge any child structures into the current one, combining keys into a single key
+			when Map { $_.&helmSetPairs.map(-> $child { "{$parent.key}.{$child.key}"  => $child.value }).Slip }
+			when Seq { $_.&helmSetPairs.map(-> $child { "{$parent.key}[{$child.key}]" => $child.value }).Slip }
+			default  { $parent.key => $parent.value }
+		}
+	});
+}
+
 sub MAIN(
 	Bool :$diff,
 	Bool :$dry-run,
@@ -53,7 +76,7 @@ sub MAIN(
 		for @(.<pre-hook>[?]) { .&shell or fail }
 
 		my Str $valArgs = .<values>[?].map(-> $valueFile {" --values {.<file>.IO.dirname}/$valueFile"}).join;
-		my Str $setArgs = .<set>[?].map({" --set {.key}={.value}"}).join;
+		my Str $setArgs = .<set>[?].&helmSetPairs.map({" --set {.key}={.value}"}).join;
 		my Str $versionArgs = .<version> ?? " --version {.<version>}" !! '';
 
 		my $task = Proc::Async.new(<<
