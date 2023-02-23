@@ -58,6 +58,7 @@ sub helmSetPairs($data) {
 sub MAIN(
 	Bool :$diff, # named parameter. in MAIN it creates a --flag on the cli
 	Bool :$dry-run,
+	Bool :$template,
 	*@files where { $_ > 0 && $_.all.IO.f }, # all remaining arguments are put in the @files Array
 ) {
 	# @packages is a list of Maps, where each Map contains the information for a Helm package.
@@ -111,7 +112,12 @@ sub MAIN(
 
 		my $task = Proc::Async.new(<< # <<foo bar>> creates an array on each space separator, and quoting groups
 			helm {'diff' if $diff}
-				upgrade --install "$_.<name>" "$_.<chart>"
+				{ if $template {
+					'template'
+				} else {
+					'upgrade --install'
+				}}
+				"$_.<name>" "$_.<chart>"
 				--repo "{.<repo> // ""}"
 				--namespace "$_.<namespace>"
 				{ '--create-namespace' if not $diff }
