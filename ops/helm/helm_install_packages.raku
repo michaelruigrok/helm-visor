@@ -5,7 +5,7 @@
 # This file has been over-commented, to assist those new to Raku.
 # Please ensure any comments are up-to-date when you edit code.
 
-use JSON::Fast;
+use YAMLish;
 
 # eg @var[?]. Turn a possible Nil into an empty list []
 sub postfix:<[?]>(Any $var) { $var // [] }
@@ -22,9 +22,9 @@ sub postfix:<[?]>(Any $var) { $var // [] }
 #   "a.c": 2
 # }
 # for all nested objects
-sub helmSetPairs($json) {
-	$json.pairs.map({
-		my $prefix = $json ~~ List ?? "[{.key}]" !! .key;
+sub helmSetPairs($data) {
+	$data.pairs.map({
+		my $prefix = $data ~~ List ?? "[{.key}]" !! .key;
 
 		given .value {
 			# merge any child structures into the current one, combining keys into a single key
@@ -41,7 +41,8 @@ sub MAIN(
 	*@files where { $_ > 0 && $_.all.IO.f },
 ) {
 	my @packages = @files.map( -> $file {
-		$file.IO.slurp.&from-json # get json array of packages from file
+		my $data = $file.IO.slurp;
+		load-yaml($data) # get yaml/json array of packages from file
 			# add file as a field to each package
 			# '$_' is a 'topic variable', the default var name for a lambda/closure
 			.map({ $_.append('file', $file) })
@@ -82,7 +83,7 @@ sub MAIN(
 		my Str $versionArgs = .<version> ?? " --version {.<version>}" !! '';
 
 		my $task = Proc::Async.new(<<
-			echo helm {'diff' if $diff}
+			helm {'diff' if $diff}
 				upgrade --install "$_.<name>" "$_.<chart>"
 				--repo "{.<repo> // ""}"
 				--namespace "$_.<namespace>"
