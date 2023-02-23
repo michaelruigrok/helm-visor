@@ -22,13 +22,15 @@ sub postfix:<[?]>(Any $var) { $var // [] }
 #   "a.c": 2
 # }
 # for all nested objects
-sub helmSetPairs(%map) {
-	%map.map( -> $parent {
-		given $parent.value {
+sub helmSetPairs($json) {
+	$json.pairs.map({
+		my $prefix = $json ~~ List ?? "[{.key}]" !! .key;
+
+		given .value {
 			# merge any child structures into the current one, combining keys into a single key
-			when Map { $_.&helmSetPairs.map(-> $child { "{$parent.key}.{$child.key}"  => $child.value }).Slip }
-			when Seq { $_.&helmSetPairs.map(-> $child { "{$parent.key}[{$child.key}]" => $child.value }).Slip }
-			default  { $parent.key => $parent.value }
+			when Associative { $_.&helmSetPairs.map({ "{$prefix}.{.key}" => .value }).Slip }
+			when List        { $_.&helmSetPairs.map({ "{$prefix}{.key}"  => .value }).Slip }
+			default  { $prefix => $_ }
 		}
 	});
 }
@@ -82,7 +84,7 @@ sub MAIN(
 		my $task = Proc::Async.new(<<
 			echo helm {'diff' if $diff}
 				upgrade --install "$_.<name>" "$_.<chart>"
-				--repo "{.<repo> // ""}
+				--repo "{.<repo> // ""}"
 				--namespace "$_.<namespace>"
 				{ '--create-namespace' if not $diff }
 				{'--dry-run' if $dry-run}
