@@ -1,4 +1,6 @@
 #!/usr/bin/env rakudo
+#
+# Installs helm packages defined in a pkg JSON file
 
 use JSON::Fast;
 
