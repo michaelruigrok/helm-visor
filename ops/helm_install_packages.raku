@@ -15,36 +15,22 @@ sub MAIN(*@files where { $_ > 0 && $_.all.IO.f }) {
 	my %packages = @packages.map({ $_.<name> => $_ });
 
 	# test for dependency loops
-	sub checkDependencies(@branch) {
-		my $tail = @branch[*-1];
-		for %packages{$tail}<dependencies> // [] {
-			if $_ (elem) @branch { die "Dependency $_ contains circular loop: {@branch}" }
-			checkDependencies([|@branch, $_]);
+	sub checkDependencies(@depChain) {
+		my $last = @depChain[*-1];
+		for %packages{$last}<dependencies>[?] {
+			if $_ (elem) @depChain { die "Dependency $_ contains circular loop: {@depChain}" }
+			checkDependencies([|@depChain, $_]);
 		}
 	}
 	for @packages { checkDependencies([.<name>]) }
 
-	# create a hash of dependency -> package
-	# used to find what package to try and install next
-	my %next;
-	for @packages -> %package {
-		for %package<dependencies> // [] -> $dependency {
-			if not %next{$dependency}:exists {
-				%next{$dependency} //= [];
-			}
-			%next{$dependency}.push(%package<name>);
-		}
-	}
+	# done promises for each package to obey dependencies
+	my %done;
+	for %packages.values { %done{.<name>} = Promise.new() }
 
-	my @backgroundTasks = [];
-
-	sub installPackage($_) {
-		return if .<done>;
-		for .<dependencies>[?] {
-			return if $_ and not %packages{$_}.<done>;
-		}
-
+	for @packages.hyper { 
 		for .<dependencies>[?].map({ %packages{$_} }) {
+			await %done{.<name>};
 			with .<waitCommand> { .&shell or fail } 
 		}
 
@@ -52,26 +38,17 @@ sub MAIN(*@files where { $_ > 0 && $_.all.IO.f }) {
 		my Str $setArgs = .<set>[?].map({" --set {.key}={.value}"}).join;
 
 		my $task = Proc::Async.new(<<
-			helm upgrade --install "$_.<name>" "$_.<chart>" --repo "{$_.<repo> // ""}"
+			helm upgrade --dry-run --install "$_.<name>" "$_.<chart>" --repo "{$_.<repo> // ""}"
 				--namespace "$_.<namespace>" --create-namespace
 				$valArgs $setArgs
 			>>);
-		my $promise = $task.start;
-		@backgroundTasks.push($promise);
 
-		.<done> = True;
-
-		# add to queue any packages that have this one as a dependency
-		for %next{.<name>}[?] -> $next {
-			@backgroundTasks.push($promise.then({
-				installPackage(%packages{$next});
-			}));
+		with .<name> -> $name {
+			$task.start.then({ %done{$name}.keep });
 		}
 	}
 
-	for @packages { installPackage($_); }
-
-	await @backgroundTasks;
+	await %done.values;
 	for @packages {
 		with .<waitCommand> { .&shell || fail }
 	}
