@@ -12,26 +12,27 @@ sub MAIN(*@files where *.IO.f) {
 
 	# TODO: Order by dependencies
 
+	my @backgroundTasks = [];
 	for @packages {
 		.<chart> ||= .<name>;
 
 		for .<dependencies>[?].map({ %packages{$_} }) {
-			with .<waitCommand> { .&shell }
+			with .<waitCommand> { .&shell || fail }
 		}
 
 		my Str $valArgs = .<values>[?].map({" --values $_"}).join;
 		my Str $setArgs = .<set>[?].map({" --set {.key}={.value}"}).join;
 
-		shell(qq{
+		my $task = Proc::Async.new(qqw{
 			helm upgrade --install "{.<name>}" "{.<chart>}" --repo "{.<repo>}" \\
 				--namespace "{.<namespace>}" --create-namespace \\
 				$valArgs $setArgs
 			});
+		@backgroundTasks.push($task.start);
 	}
 
+	await @backgroundTasks;
 	for @packages {
-		with .<waitCommand> { .&shell }
+		with .<waitCommand> { .&shell || fail }
 	}
 }
-
-
