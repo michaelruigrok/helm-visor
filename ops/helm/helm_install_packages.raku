@@ -106,18 +106,20 @@ sub MAIN(
 		for @(.<pre-hook>[?]) { .&shell or fail }
 
 		my Str $valArgs = .<values>[?].map(-> $valueFile {" --values {.<file>.IO.dirname}/$valueFile"}).join;
-		my Str $setArgs = .<set>[?].&helmSetPairs.map({" --set {.key}={.value}"}).join;
+		my Str @setArgs = .<set>[?].&helmSetPairs.map({ |('--set', "{.key}={.value}") });
 		my Str $versionArgs = .<version> ?? " --version {.<version>}" !! '';
 
-		my $task = Proc::Async.new(<< # <<foo bar>> creates an array on each space separator
+		my $task = Proc::Async.new(<< # <<foo bar>> creates an array on each space separator, and quoting groups
 			helm {'diff' if $diff}
 				upgrade --install "$_.<name>" "$_.<chart>"
 				--repo "{.<repo> // ""}"
 				--namespace "$_.<namespace>"
 				{ '--create-namespace' if not $diff }
 				{'--dry-run' if $dry-run}
-				$valArgs $setArgs $versionArgs
-			>>);
+				$valArgs $versionArgs
+			>>,
+			@setArgs,
+		);
 
 		with .<name> -> $name {
 			$task.start.then({ %done{$name}.keep });
