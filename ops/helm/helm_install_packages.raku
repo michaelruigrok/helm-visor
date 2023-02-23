@@ -40,13 +40,14 @@ sub MAIN(
 	Bool :$dry-run,
 	*@files where { $_ > 0 && $_.all.IO.f },
 ) {
-	my @packages = @files.map( -> $file {
-		my $data = $file.IO.slurp;
-		load-yaml($data) # get yaml/json array of packages from file
-			# add file as a field to each package
-			# '$_' is a 'topic variable', the default var name for a lambda/closure
-			.map({ $_.append('file', $file) })
-			.Slip; # merge into a single list
+	# @packages is a list of Maps, where each Map contains the information for a Helm package.
+	my Map @packages = @files.map( -> $file {
+
+		# get yaml/json Array of packages from file contents
+		my @data = load-yaml($file.IO.slurp);
+		# add file as a field to each package
+		@data.map({ $_.append('file', $file) })
+			.Slip; # Merge all files into a single list
 	});
 
 	for @packages { .<chart> //= .<name> } # default 'chart' field to value of 'name' if not set
