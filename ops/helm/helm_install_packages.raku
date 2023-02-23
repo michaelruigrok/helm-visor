@@ -8,7 +8,9 @@
 use YAMLish;
 
 # eg @var[?]. Turn a possible Nil into an empty list []
-sub postfix:<[?]>(Any $var) { $var // [] }
+sub postfix:<[?]>(Any $var) {
+	$var // []; # `//` is a null safety operator
+}
 
 # converts...
 # "a" : {
@@ -24,21 +26,33 @@ sub postfix:<[?]>(Any $var) { $var // [] }
 # for all nested objects
 sub helmSetPairs($data) {
 	$data.pairs.map({
-		my $prefix = $data ~~ List ?? "[{.key}]" !! .key;
+		my $prefix;
+		# ~~ is 'smart match', it does what you want™.
+		# In this case checking $data is of type List.
+		if $data ~~ List {
+			# '$_' is a 'topic variable', the default var name for a lambda/closure.
+			# In this case, the element being mapped.
+			$prefix = "[{$_.key}]";
+		} else {
+			# A method call without an object in front will also use the topic variable.
+			$prefix = .key;
+		}
 
+		# Raku's switch statement. Smart matches .value to each `when`.
 		given .value {
 			# merge any child structures into the current one, combining keys into a single key
 			when Associative { $_.&helmSetPairs.map({ "{$prefix}.{.key}" => .value }).Slip }
 			when List        { $_.&helmSetPairs.map({ "{$prefix}{.key}"  => .value }).Slip }
-			default  { $prefix => $_ }
+			default  { $prefix => $_ } # a => b is a key-value Pair. Can be added as an element to a Map.
 		}
 	});
 }
 
+# MAIN subroutine auto-generates a command-line interface for this program!
 sub MAIN(
-	Bool :$diff,
+	Bool :$diff, # named parameter. in MAIN it creates a --flag on the cli
 	Bool :$dry-run,
-	*@files where { $_ > 0 && $_.all.IO.f },
+	*@files where { $_ > 0 && $_.all.IO.f }, # all remaining arguments are put in the @files Array
 ) {
 	# @packages is a list of Maps, where each Map contains the information for a Helm package.
 	my Map @packages = @files.map( -> $file {
@@ -50,12 +64,14 @@ sub MAIN(
 			.Slip; # Merge all files into a single list
 	});
 
-	for @packages { .<chart> //= .<name> } # default 'chart' field to value of 'name' if not set
+	# default 'chart' field to value of 'name' if not set
+	for @packages { .<chart> //= .<name> } # $_<foo> access the value of key 'foo' in map $_
 
 	# hashmap of {name => package}, for easy lookup
 	my %packages = @packages.map({ $_.<name> => $_ });
 
 	# test for loops in the dependency chain
+	# don't worry about this unless you have to modify the dependency resolution impl.
 	sub checkDependencies(@depChain) {
 		my $last = @depChain[*-1];
 		for %packages{$last}<dependencies>[?] {
@@ -71,10 +87,10 @@ sub MAIN(
 	for %packages.values { %done{.<name>} = Promise.new() }
 
 	# hyper splits each element to run on its own thread, asyncronously.
-	for @packages.hyper { 
+	for @packages.hyper {
 		for .<dependencies>[?].map({ %packages{$_} }) {
 			await %done{.<name>};
-			with .<waitCommand> { .&shell or fail } 
+			with .<waitCommand> { .&shell or fail }  # bar.&foo runs the bar function on foo
 		}
 
 		for @(.<pre-hook>[?]) { .&shell or fail }
@@ -83,7 +99,7 @@ sub MAIN(
 		my Str $setArgs = .<set>[?].&helmSetPairs.map({" --set {.key}={.value}"}).join;
 		my Str $versionArgs = .<version> ?? " --version {.<version>}" !! '';
 
-		my $task = Proc::Async.new(<<
+		my $task = Proc::Async.new(<< # <<foo bar>> creates an array on each space separator
 			helm {'diff' if $diff}
 				upgrade --install "$_.<name>" "$_.<chart>"
 				--repo "{.<repo> // ""}"
@@ -100,6 +116,6 @@ sub MAIN(
 
 	await %done.values;
 	for @packages {
-		with .<waitCommand> { .&shell || fail }
+		with .<waitCommand> { .&shell or fail }
 	}
 }
