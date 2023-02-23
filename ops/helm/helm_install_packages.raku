@@ -43,7 +43,13 @@ sub helmSetPairs($data) {
 			# merge any child structures into the current one, combining keys into a single key
 			when Associative { $_.&helmSetPairs.map({ "{$prefix}.{.key}" => .value }).Slip }
 			when List        { $_.&helmSetPairs.map({ "{$prefix}{.key}"  => .value }).Slip }
-			default  { $prefix => $_ } # a => b is a key-value Pair. Can be added as an element to a Map.
+
+			# a => b is a key-value Pair. Each of these will be added to the parent map directly.
+			when 'true'      { $prefix => '\"true\"'  }
+			when 'false'     { $prefix => '\"false\"' }
+			when * === True  { $prefix => 'true'      }
+			when * === False { $prefix => 'false'     }
+			default          { $prefix => $_          }
 		}
 	});
 }
