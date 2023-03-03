@@ -3,15 +3,20 @@
   namespace: cert-manager
   repo: https://charts.jetstack.io/
   # optional fields
+  chart: chart-name # defaults to name
   dependencies:
     - name
-  # defaults to name
-  chart: chart-name
-  # waits until app is fully installed
-  waitCommand: kubectl wait --namespace <namespace> --for=condition=ready pod --selector=label=selector --timeout=120s
-  version: version-to-install
-  values: values.yaml
   set:
     variable: value
     boolean: true
     number: 6617
+    nested.var.name: foo
+    # is the same as:
+    nested:
+      var:
+        name: foo
+    'un-nested\.dot\.variables': must be escaped.
+  # waits until app is fully installed. Use if package is the dependency of another.
+  waitCommand: kubectl wait --namespace <namespace> --for=condition=ready pod --selector=label=selector --timeout=120s
+  version: version-to-install
+  values: values.yaml
