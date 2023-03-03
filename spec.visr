@@ -1,21 +1,17 @@
-{
-	# required
-	"name": "install-name",
-	"namespace": "cert-manager",
-	"repo": "https://charts.jetstack.io/",
-	# optional
-	"dependencies": [
-	  "name"
-	],
-    # defaults to name
-	"chart": "chart-name",
-    # waits until app is fully installed
-	"waitCommand": "kubectl wait --namespace <namespace> --for=condition=ready pod --selector=label=selector --timeout=120s",
-	"version": "version-to-install",
-	"values": "values.yaml",
-	"set":{
-		"variable": "value",
-		"boolean": true,
-		"number": 6617,
-	}
-}
+  # required fields
+- name: install-name
+  namespace: cert-manager
+  repo: https://charts.jetstack.io/
+  # optional fields
+  dependencies:
+    - name
+  # defaults to name
+  chart: chart-name
+  # waits until app is fully installed
+  waitCommand: kubectl wait --namespace <namespace> --for=condition=ready pod --selector=label=selector --timeout=120s
+  version: version-to-install
+  values: values.yaml
+  set:
+    variable: value
+    boolean: true
+    number: 6617
