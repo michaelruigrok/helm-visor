@@ -2,10 +2,15 @@
 - name: install-name
   namespace: cert-manager
   repo: https://charts.jetstack.io/
+
   # optional fields
   chart: chart-name # defaults to name
   dependencies:
-    - name
+    - required-package-name
+  # commands that are run and must succeed before the package is installed
+  pre-hook:
+    - kubectl annotate -n kube-system --overwrite <resource-type> <resource> 'meta.helm.sh/release-namespace=kube-system' 'meta.helm.sh/release-name=<name>'
+		- kubectl label -n kube-system --overwrite <resource-type> <resource>  'app.kubernetes.io/managed-by=Helm'
   set:
     variable: value
     boolean: true
