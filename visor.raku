@@ -56,7 +56,8 @@ sub helmSetPairs($data) {
 
 # MAIN subroutine auto-generates a command-line interface for this program!
 sub MAIN(
-	Bool :$diff, # named parameter. in MAIN it creates a --flag on the cli
+	Bool :$debug, # named parameter. in MAIN it creates a --flag on the cli
+	Bool :$diff,
 	Bool :$dry-run,
 	Bool :$template,
 	*@files where { $_ > 0 && $_.all.IO.f }, # all remaining arguments are put in the @files Array
@@ -99,6 +100,8 @@ sub MAIN(
 
 	# hyper splits each element to run on its own thread, asyncronously.
 	for @packages.hyper {
+		my $pkg = $_; # for reference in blocks
+
 		for .<dependencies>[?].map({ %packages{$_} }) {
 			await %done{.<name>};
 			with .<waitCommand> { .&shell or fail }  # bar.&foo runs the bar function on foo
@@ -108,7 +111,14 @@ sub MAIN(
 
 		my Str $valArgs = .<values>[?].map(-> $valueFile {" --values {.<file>.IO.dirname}/$valueFile"}).join;
 		my Str @setArgs = .<set>[?].&helmSetPairs.map({ |('--set', "{.key}={.value}") });
-		my Str $versionArgs = .<version> ?? " --version {.<version>}" !! '';
+
+		sub arg(Str $arg) {
+			given $pkg{$arg} {
+				when Bool { "--$arg" if $_; }
+				default   { $_ ?? "--$arg $_" !! ""; }
+
+			}
+		}
 
 		my $task = Proc::Async.new(<< # <<foo bar>> creates an array on each space separator, and quoting groups
 			helm {'diff' if $diff}
@@ -118,11 +128,14 @@ sub MAIN(
 					'upgrade --install'
 				}}
 				"$_.<name>" "$_.<chart>"
-				--repo "{.<repo> // ""}"
-				--namespace "$_.<namespace>"
+				# optional args in alphabetical order
 				{ '--create-namespace' if not $diff }
+				{'--debug' if $debug}
 				{'--dry-run' if $dry-run}
-				$valArgs $versionArgs
+				{ arg 'namespace' }
+				{ arg 'repo' }
+				{ arg 'version' }
+				$valArgs
 			>>,
 			@setArgs,
 		);
