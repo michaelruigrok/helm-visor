@@ -43,12 +43,7 @@ sub helmSetPairs($data) {
 			# merge any child structures into the current one, combining keys into a single key
 			when Associative { $_.&helmSetPairs.map({ "{$prefix}.{.key}" => .value }).Slip }
 			when List        { $_.&helmSetPairs.map({ "{$prefix}{.key}"  => .value }).Slip }
-
-			# a => b is a key-value Pair. Each of these will be added to the parent map directly.
-			when 'true'      { $prefix => '\"true\"'  }
-			when 'false'     { $prefix => '\"false\"' }
-			when * === True  { $prefix => 'true'      }
-			when * === False { $prefix => 'false'     }
+			# a => b is a key-value Pair. Will be added to the parent map directly.
 			default          { $prefix => $_          }
 		}
 	});
@@ -110,13 +105,23 @@ sub MAIN(
 		for @(.<pre-hook>[?]) { .&shell or fail }
 
 		my Str $valArgs = .<values>[?].map(-> $valueFile {" --values {.<file>.IO.dirname}/$valueFile"}).join;
-		my Str @setArgs = .<set>[?].&helmSetPairs.map({ |('--set', "{.key}={.value}") });
+		my Str @setArgs = .<set>[?].&helmSetPairs.map({ |('--set', "{.key}={
+			given .value {
+				# Appropriately format each value so each argument is interpreted as the correct type
+				when 'true'                  { '\"true\"'       }
+				when 'false'                 { '\"false\"'      }
+				when 'false'                 { '\"false\"'      }
+				when { $_ ~~ Str && $_.Num } { '\"' ~ $_ ~ '\"' }
+				when * === True              { 'true'           }
+				when * === False             { 'false'          }
+				default                      { $_               }
+			}
+		}") });
 
 		sub arg(Str $arg) {
 			given $pkg{$arg} {
 				when Bool { "--$arg" if $_; }
 				default   { $_ ?? "--$arg $_" !! ""; }
-
 			}
 		}
 
